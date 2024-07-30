@@ -16,6 +16,8 @@
 
 using namespace std;
 
+typedef boost::asio::serial_port_base sb;
+
 #define REPLY_LENGTH 4
 
 boost::asio::serial_port* serial_port = 0;
@@ -62,12 +64,6 @@ bool validate_checksum(const unsigned char *data, unsigned short length)
   return (chksum == rchksum);
 }
 
-void makeUnsignedInt16(unsigned int val, unsigned char* high, unsigned char* low)
-{
-    *low = static_cast<unsigned char>(val);
-    *high = static_cast<unsigned char>(val >> 8);
-}
-
 inline void print_bytes(const unsigned char *data, unsigned short length)
 {
   for (unsigned int i = 0; i < length; i++)
@@ -75,25 +71,22 @@ inline void print_bytes(const unsigned char *data, unsigned short length)
   puts("");
 }
 
-int main(int argc, char** argv)
+void makeUnsignedInt16(unsigned int val, unsigned char* high, unsigned char* low)
 {
-  ros::init(argc, argv, "imu");
-  ros::NodeHandle n("~");
+    *low = static_cast<unsigned char>(val);
+    *high = static_cast<unsigned char>(val >> 8);
+}
 
-  name = ros::this_node::getName();
-
-  std::string port;
-  if (n.hasParam("port"))
-    n.getParam("port", port);
-  else
-    {
-      ROS_ERROR("%s: must provide a port", name.c_str());
-      return -1;
-    }
-
-  boost::asio::io_service io_service;
-  serial_port = new boost::asio::serial_port(io_service);
-
+void makeUnsignedInt32(int val, unsigned char* byte3, unsigned char* byte2, unsigned char* byte1, unsigned char* byte0)
+{
+    *byte0 = static_cast<unsigned char>(val);
+    *byte1 = static_cast<unsigned char>(val >> 8);
+    *byte2 = static_cast<unsigned char>(val >> 16);
+    *byte3 = static_cast<unsigned char>(val >> 24);
+}
+    
+void check_port(boost::asio::serial_port* serial_port, std::string port)
+{
   try
     {
       serial_port->open(port);
@@ -102,105 +95,19 @@ int main(int argc, char** argv)
     {
       ROS_ERROR("%s: Failed to open port %s with error %s",
                 name.c_str(), port.c_str(), error.what());
-      return -1;
+      exit(EXIT_FAILURE); // 프로그램 종료
     }
 
   if (!serial_port->is_open())
     {
       ROS_ERROR("%s: failed to open serial port %s",
                 name.c_str(), port.c_str());
-      return -1;
+      exit(EXIT_FAILURE); // 프로그램 종료
     }
+}
 
-  int baud;
-  n.param("baud", baud, 460800);
-
-  string frame_id;
-  n.param("frame_id", frame_id, string("world"));
-
-  double delay;
-  n.param("delay", delay, 0.0);
-
-  typedef boost::asio::serial_port_base sb;
-
-  sb::baud_rate baud_option(baud);
-  sb::flow_control flow_control(sb::flow_control::none);
-  sb::parity parity(sb::parity::none);
-  sb::stop_bits stop_bits(sb::stop_bits::one);
-
-  serial_port->set_option(baud_option);
-  serial_port->set_option(flow_control);
-  serial_port->set_option(parity);
-  serial_port->set_option(stop_bits);
-
-  // Stop continous mode if it is running
-  boost::asio::write(*serial_port, boost::asio::buffer(stop, 3));
-  ROS_WARN("Wait 0.1s"); 
-  ros::Duration(0.1).sleep();
-
-  // Check the mode
-  bool reInitFlag = false;
-  boost::asio::write(*serial_port, boost::asio::buffer(mode, 4));
-  boost::asio::read(*serial_port, boost::asio::buffer(reply, REPLY_LENGTH));
-  if (!validate_checksum(reply, REPLY_LENGTH))
-    {
-      ROS_ERROR("%s: failed to get mode", name.c_str());
-      if (serial_port->is_open())
-        serial_port->close();
-      reInitFlag = true;
-    }
-
-  if (reInitFlag)
-  {
-    ROS_WARN("In Re-Init");
-    ros::Duration(0.1).sleep();
-    try
-      {
-        serial_port->open(port);
-      }
-    catch (boost::system::system_error &error)
-      {
-        ROS_ERROR("%s: Failed to open port %s with error %s",
-                  name.c_str(), port.c_str(), error.what());
-        return -1;
-      }
-    if (!serial_port->is_open())
-      {
-        ROS_ERROR("%s: failed to open serial port %s",
-                  name.c_str(), port.c_str());
-        return -1;
-      }
-    serial_port->set_option(baud_option);
-    serial_port->set_option(flow_control);
-    serial_port->set_option(parity);
-    serial_port->set_option(stop_bits);
-    // Check the mode
-    boost::asio::write(*serial_port, boost::asio::buffer(mode, 4));
-    boost::asio::read(*serial_port, boost::asio::buffer(reply, REPLY_LENGTH));
-    if (!validate_checksum(reply, REPLY_LENGTH))
-      {
-        ROS_ERROR("%s: failed to get mode", name.c_str());
-        if (serial_port->is_open())
-          serial_port->close();
-        return -1;
-      }    
-  }
-
-  // If we are not in active mode, change it
-  if (reply[2] != '\x01')
-    {
-      mode[3] = '\x01';
-      boost::asio::write(*serial_port, boost::asio::buffer(mode, 4));
-      boost::asio::read(*serial_port, boost::asio::buffer(reply, REPLY_LENGTH));
-      if (!validate_checksum(reply, REPLY_LENGTH))
-        {
-          ROS_ERROR("%s: failed to set mode to active", name.c_str());
-          if (serial_port->is_open())
-            serial_port->close();
-          return -1;
-        }
-    }
-
+void set_continous_preset_mode(boost::asio::serial_port* serial_port)
+{
   // Set the continous preset mode
   const char preset[4] = {'\xD6','\xC6','\x6B','\xCC'};
   boost::asio::write(*serial_port, boost::asio::buffer(preset, 4));
@@ -211,23 +118,18 @@ int main(int argc, char** argv)
       ROS_ERROR("%s: failed to set continuous mode preset", name.c_str());
       if (serial_port->is_open())
         serial_port->close();
-      return -1;
+      exit(EXIT_FAILURE); // 프로그램 종료
     }
+}
 
-
+void set_data_rate(boost::asio::serial_port* serial_port, int decimation)
+{
 
   unsigned char ocsb;       // orientation, coning & sculling byte
   unsigned char decu, decl; // decimation value upper & lower bytes
   unsigned char wndb;       // digital filter window size byte
-
-  unsigned int decimation = 1000 / 250;
   
   makeUnsignedInt16(decimation, &decu, &decl);
-
-  // don't compute orientation if we're running at max rate
-  // if (app->data_rate == DATA_RATE_HIGH)
-  //     ocsb = 0x02;
-  // else
 
   int filter_window_size = 15;
   
@@ -258,18 +160,54 @@ int main(int argc, char** argv)
   unsigned char reply_data[19];
   boost::asio::write(*serial_port, boost::asio::buffer(set_sampling_params_string, 20));
   boost::asio::read(*serial_port, boost::asio::buffer(reply_data, 19));
-
-  //print_bytes(&reply,19)
   
   if (!validate_checksum(reply_data, 19))
     {
       ROS_ERROR("%s: failed to set data rate", name.c_str());
       if (serial_port->is_open())
         serial_port->close();
-      return -1;
+      exit(EXIT_FAILURE); // 프로그램 종료
     }
+}
 
+void set_baudrate(boost::asio::serial_port* serial_port, int baud)
+{
 
+  unsigned char baud0, baud1, baud2, baud3;
+
+  // Convert our int baud rate, into 4 seperate bytes
+  makeUnsignedInt32(baud, &baud3, &baud2, &baud1, &baud0);
+
+  // Set the mode to continous output
+  unsigned char set_comms_baud_rate_string[] = {
+        0xD9, // Byte  1    : command
+        0xC3, // Bytes 2-3: confirm intent
+        0x55,
+        0x01,  // Byte  4  : port selector
+        0x00,  // Byte  5  : temporary change
+        baud3, // Bytes 6-9: baud rate
+        baud2,
+        baud1,
+        baud0,
+        0x10, // Byte  10 : port config
+        0x00  // Byte  11 : reserved (zero)
+    };
+    
+  unsigned char reply_baud[10];
+  boost::asio::write(*serial_port, boost::asio::buffer(set_comms_baud_rate_string, 11));
+  boost::asio::read(*serial_port, boost::asio::buffer(reply_baud, 10));
+  
+  if (!validate_checksum(reply_baud, 10))
+    {
+      ROS_ERROR("%s: failed to set baudrate", name.c_str());
+      if (serial_port->is_open())
+        serial_port->close();
+      exit(EXIT_FAILURE); // 프로그램 종료
+    }
+}
+
+void set_continous_output_mode(boost::asio::serial_port* serial_port)
+{
   // Set the mode to continous output
   mode[3] = '\x02';
   boost::asio::write(*serial_port, boost::asio::buffer(mode, 4));
@@ -279,18 +217,127 @@ int main(int argc, char** argv)
       ROS_ERROR("%s: failed to set mode to continuous output", name.c_str());
       if (serial_port->is_open())
         serial_port->close();
-      return -1;
+      exit(EXIT_FAILURE); // 프로그램 종료
     }
-
+} 
+ 
+void set_timer(boost::asio::serial_port* serial_port)
+{
   // Set Timer
   char set_timer[8] = {'\xD7','\xC1','\x29','\x01','\x00','\x00','\x00','\x00'};
   unsigned char reply_timer[7];
   boost::asio::write(*serial_port, boost::asio::buffer(set_timer, 8));
-//  ros::Time t0 = ros::Time::now();  
+  // ros::Time t0 = ros::Time::now();  
   boost::asio::read(*serial_port, boost::asio::buffer(reply_timer, 7));
+}
+
+void set_stop_continous_mode(boost::asio::serial_port* serial_port)
+{
+  // Stop continous mode if it is running
+  boost::asio::write(*serial_port, boost::asio::buffer(stop, 3));
+  ROS_WARN("Wait 0.1s"); 
+  ros::Duration(0.1).sleep();
+}
+
+
+int main(int argc, char** argv)
+{
+  ros::init(argc, argv, "imu");
+  ros::NodeHandle n("~");
+  name = ros::this_node::getName();
+
+  int decimation;
+  std::string port;
+  int baud;
+  string frame_id;
+  double delay;
+
+  n.param("decimation", decimation, 3);
+  n.param("port", port, string("/dev/ttyACM0") );
+  n.param("baud", baud, 230400);
+  n.param("frame_id", frame_id, string("world"));
+  n.param("delay", delay, 0.0);
+
+  boost::asio::io_service io_service;
+  serial_port = new boost::asio::serial_port(io_service);
+
+  check_port(serial_port, port);
+
+  //set_baudrate(serial_port, baud);
+
+  sb::baud_rate baud_option(baud);
+  sb::flow_control flow_control(sb::flow_control::none);
+  sb::parity parity(sb::parity::none);
+  sb::stop_bits stop_bits(sb::stop_bits::one);
+
+  serial_port->set_option(baud_option);
+  serial_port->set_option(flow_control);
+  serial_port->set_option(parity);
+  serial_port->set_option(stop_bits);
+
+  set_stop_continous_mode(serial_port);
+
+  // Check the mode
+  bool reInitFlag = false;
+  boost::asio::write(*serial_port, boost::asio::buffer(mode, 4));
+  boost::asio::read(*serial_port, boost::asio::buffer(reply, REPLY_LENGTH));
+  
+  if (!validate_checksum(reply, REPLY_LENGTH))
+    {
+      ROS_ERROR("%s: failed to get mode", name.c_str());
+      if (serial_port->is_open())
+        serial_port->close();
+      reInitFlag = true;
+    }
+
+  if (reInitFlag)
+  {
+    ROS_WARN("In Re-Init");
+    ros::Duration(0.1).sleep();
+
+    check_port(serial_port, port);
+
+    serial_port->set_option(baud_option);
+    serial_port->set_option(flow_control);
+    serial_port->set_option(parity);
+    serial_port->set_option(stop_bits);
+
+    // Check the mode
+    boost::asio::write(*serial_port, boost::asio::buffer(mode, 4));
+    boost::asio::read(*serial_port, boost::asio::buffer(reply, REPLY_LENGTH));
+    if (!validate_checksum(reply, REPLY_LENGTH))
+      {
+        ROS_ERROR("%s: failed to get mode", name.c_str());
+        if (serial_port->is_open())
+          serial_port->close();
+        return -1;
+      }    
+  }
+
+  // If we are not in active mode, change it
+  if (reply[2] != '\x01')
+    {
+      mode[3] = '\x01';
+      boost::asio::write(*serial_port, boost::asio::buffer(mode, 4));
+      boost::asio::read(*serial_port, boost::asio::buffer(reply, REPLY_LENGTH));
+      if (!validate_checksum(reply, REPLY_LENGTH))
+        {
+          ROS_ERROR("%s: failed to set mode to active", name.c_str());
+          if (serial_port->is_open())
+            serial_port->close();
+          return -1;
+        }
+    }
+
+
+  set_continous_preset_mode(serial_port);
+  set_data_rate(serial_port, decimation);
+  set_continous_output_mode(serial_port);  
+  set_timer(serial_port);
+
+
+
   ros::Time t0 = ros::Time::now();  
-
-
 
   ROS_WARN("Streaming Data...");
   unsigned short data_length = 79;
