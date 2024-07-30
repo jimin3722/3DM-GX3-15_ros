@@ -62,6 +62,12 @@ bool validate_checksum(const unsigned char *data, unsigned short length)
   return (chksum == rchksum);
 }
 
+void makeUnsignedInt16(unsigned int val, unsigned char* high, unsigned char* low)
+{
+    *low = static_cast<unsigned char>(val);
+    *high = static_cast<unsigned char>(val >> 8);
+}
+
 inline void print_bytes(const unsigned char *data, unsigned short length)
 {
   for (unsigned int i = 0; i < length; i++)
@@ -107,7 +113,7 @@ int main(int argc, char** argv)
     }
 
   int baud;
-  n.param("baud", baud, 115200);
+  n.param("baud", baud, 460800);
 
   string frame_id;
   n.param("frame_id", frame_id, string("world"));
@@ -208,6 +214,62 @@ int main(int argc, char** argv)
       return -1;
     }
 
+
+
+  unsigned char ocsb;       // orientation, coning & sculling byte
+  unsigned char decu, decl; // decimation value upper & lower bytes
+  unsigned char wndb;       // digital filter window size byte
+
+  unsigned int decimation = 1000 / 250;
+  
+  makeUnsignedInt16(decimation, &decu, &decl);
+
+  // don't compute orientation if we're running at max rate
+  // if (app->data_rate == DATA_RATE_HIGH)
+  //     ocsb = 0x02;
+  // else
+
+  int filter_window_size = 15;
+  
+  ocsb = 0x03;
+
+  wndb = static_cast<unsigned char>(filter_window_size);
+
+  // Set the mode to continous output
+  unsigned char set_sampling_params_string[] = {
+        0xDB, // Byte  1    : command
+        0xA8,                      // Bytes 2-3  : confirm intent
+        0xB9,
+        0x01, // Byte  4    : change params
+        decu, // Bytes 5-6  : decimation value
+        decl,
+        0x00, // Bytes 7-8  : flags - orient
+        ocsb,
+        wndb, // Byte  9    : gyro/accel window size
+        0x11, // Byte  10   : magneto window size
+        0x00, // Byte  11-12: up compensation
+        0x0A,
+        0x00, // Byte  13-14: north compensation
+        0x0A,
+        0x01, // Byte  15   : low magneto power
+        0x00, // Bytes 16-20: reserved (zeros)
+        0x00, 0x00, 0x00, 0x00
+    };
+  unsigned char reply_data[19];
+  boost::asio::write(*serial_port, boost::asio::buffer(set_sampling_params_string, 20));
+  boost::asio::read(*serial_port, boost::asio::buffer(reply_data, 19));
+
+  //print_bytes(&reply,19)
+  
+  if (!validate_checksum(reply_data, 19))
+    {
+      ROS_ERROR("%s: failed to set data rate", name.c_str());
+      if (serial_port->is_open())
+        serial_port->close();
+      return -1;
+    }
+
+
   // Set the mode to continous output
   mode[3] = '\x02';
   boost::asio::write(*serial_port, boost::asio::buffer(mode, 4));
@@ -227,6 +289,8 @@ int main(int argc, char** argv)
 //  ros::Time t0 = ros::Time::now();  
   boost::asio::read(*serial_port, boost::asio::buffer(reply_timer, 7));
   ros::Time t0 = ros::Time::now();  
+
+
 
   ROS_WARN("Streaming Data...");
   unsigned short data_length = 79;
