@@ -6,7 +6,7 @@ Adding and compiling:
 
 1. cd ~/catkin_ws/src
 
-2. git clone https://github.com/jimin3722/3dm_gx3_15_ros.git
+2. git clone https://github.com/jimin3722/3DM_GX3_15_ros.git
 
 3. rosdep install 3dm_gx3_15_ros
 
@@ -17,7 +17,7 @@ Adding and compiling:
 
 Usage:
 
-rosrun imu_3dm_gx3 imu_3dm_gx3 _port:=/dev/ttyACM0
+rosrun imu_3dm_gx3 imu_3dm_gx3 port:=/dev/ttyACM0 decimation:=2
 
-
+imu_data_rate = 1000/decimation HZ
 
