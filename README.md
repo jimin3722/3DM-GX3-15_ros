@@ -6,7 +6,7 @@ Adding and compiling:
 
 1. cd ~/catkin_ws/src
 
-2. git clone https://github.com/jimin3722/3DM_GX3_15_ros.git
+2. git clone --branch ros1 https://github.com/jimin3722/3DM_GX3_15_ros.git
 
 3. rosdep install 3dm_gx3_15_ros
 
