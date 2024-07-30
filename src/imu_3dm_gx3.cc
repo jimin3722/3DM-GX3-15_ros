@@ -235,8 +235,8 @@ int main(int argc, char** argv)
   sensor_msgs::Imu msg;
   sensor_msgs::MagneticField msg_mag;
 
-  ros::Publisher pub = n.advertise<sensor_msgs::Imu>("data_raw", 100);
-  ros::Publisher pub_mag = n.advertise<sensor_msgs::MagneticField>("mag", 100);
+  ros::Publisher pub = n.advertise<sensor_msgs::Imu>("data_raw", 200);
+  ros::Publisher pub_mag = n.advertise<sensor_msgs::MagneticField>("mag", 200);
 
   while (n.ok())
     {
