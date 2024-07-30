@@ -1,3 +1,22 @@
-# ROS Data Acquisition Driver for 3DM-GX3-25 IMU module (Single Byte Protocol)
+# ROS Data Acquisition Driver for 3DM-GX3-15 IMU module (Single Byte Protocol)
 
-This program is from Nathan Michael's original ROS driver for the Lord Corporation Microstrain 3DM GX3 25 IMU (https://github.com/KumarRobotics/imu_3dm_gx3) and is revised for attitude estimation using AQUA complementary filter (https://github.com/ccny-ros-pkg/imu_tools).
+This program is from Nathan Michael's original ROS driver for the Lord Corporation Microstrain 3DM GX3 15,25 IMU 
+
+Adding and compiling:
+
+1. cd ~/ros2_ws/src
+
+2. git clone https://github.com/jimin3722/3DM_GX3_15_ros.git
+
+3. cd ..
+
+4. colcon_build 
+
+5. source install/setup.bash
+
+Usage:
+
+ros2 run imu_3dm_gx3 imu_3dm_gx3 port:=/dev/ttyACM0 decimation:=2
+
+imu_data_rate = 1000/decimation HZ
+
