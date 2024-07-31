@@ -358,12 +358,12 @@ int main(int argc, char** argv) {
 
         msg.header.stamp = t0 + rclcpp::Duration::from_seconds(T) - rclcpp::Duration::from_seconds(delay);        
         msg.header.frame_id = frame_id;
-        msg.angular_velocity.x = -ang_vel[2];
-        msg.angular_velocity.y = -ang_vel[1];
-        msg.angular_velocity.z = -ang_vel[0];
-        msg.linear_acceleration.x = -acc[2] * GRAVITY;
-        msg.linear_acceleration.y = -acc[1] * GRAVITY;
-        msg.linear_acceleration.z = -acc[0] * GRAVITY;
+        msg.angular_velocity.x = ang_vel[0];
+        msg.angular_velocity.y = ang_vel[1];
+        msg.angular_velocity.z = ang_vel[2];
+        msg.linear_acceleration.x = acc[0] * GRAVITY;
+        msg.linear_acceleration.y = acc[1] * GRAVITY;
+        msg.linear_acceleration.z = acc[2] * GRAVITY;
         // mat R(3,3);
         // for (unsigned int i = 0; i < 3; i++)
         //   for (unsigned int j = 0; j < 3; j++)
