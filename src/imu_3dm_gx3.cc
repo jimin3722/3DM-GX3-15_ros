@@ -15,6 +15,7 @@
 // #include "pose_utils.h"
 
 using namespace std;
+#define GRAVITY 9.80665
 
 typedef boost::asio::serial_port_base sb;
 
@@ -376,12 +377,12 @@ int main(int argc, char** argv)
 
       msg.header.stamp    = t0 + ros::Duration(T) - ros::Duration(delay);
       msg.header.frame_id = frame_id;
-      msg.angular_velocity.x = -ang_vel[2];
-      msg.angular_velocity.y = -ang_vel[1];
-      msg.angular_velocity.z = -ang_vel[0];
-      msg.linear_acceleration.x = -acc[2] * 9.81;
-      msg.linear_acceleration.y = -acc[1] * 9.81;
-      msg.linear_acceleration.z = -acc[0] * 9.81;
+      msg.angular_velocity.x = ang_vel[0];
+      msg.angular_velocity.y = ang_vel[1];
+      msg.angular_velocity.z = ang_vel[2];
+      msg.linear_acceleration.x = acc[0] * GRAVITY;
+      msg.linear_acceleration.y = acc[1] * GRAVITY;
+      msg.linear_acceleration.z = acc[2] * GRAVITY;
       // mat R(3,3);
       // for (unsigned int i = 0; i < 3; i++)
       //   for (unsigned int j = 0; j < 3; j++)
