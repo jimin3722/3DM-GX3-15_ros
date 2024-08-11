@@ -1,9 +1,3 @@
-// Interface to the Microstrain 3DM-GX3-25
-// N. Michael
-// y = -y
-// x = -z
-// z = -x
-
 #include "rclcpp/rclcpp.hpp"
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
@@ -18,7 +12,7 @@ using namespace std;
 typedef boost::asio::serial_port_base sb;
 
 #define REPLY_LENGTH 4
-#define GRAVITY 9.80665
+#define GRAVITY 9.85011
 
 boost::asio::serial_port* serial_port = nullptr;
 const char stop[3] = {'\xFA','\x75','\xB4'};
@@ -225,9 +219,9 @@ int main(int argc, char** argv) {
     std::string frame_id;
     double delay;
 
-    node->declare_parameter("decimation", 3);
+    node->declare_parameter("decimation", 5);
     node->declare_parameter("port", "/dev/ttyACM0");
-    node->declare_parameter("baud", 230400);
+    node->declare_parameter("baud", 115200);
     node->declare_parameter("frame_id", "world");
     node->declare_parameter("delay", 0.0);
 
